@@ -22,6 +22,11 @@ restart :: proc() {
 	started = false
 }
 
+reflect :: proc(dir, normal: rl.Vector2) -> rl.Vector2 {
+	new_direction := linalg.reflect(dir, linalg.normalize(normal))
+	return linalg.normalize(new_direction)
+}
+
 main :: proc() {
 	rl.SetConfigFlags({.VSYNC_HINT})
 	rl.InitWindow(1280, 1280, "Breakout!")
@@ -49,8 +54,30 @@ main :: proc() {
 		} else {
 			dt = rl.GetFrameTime()
 		}
+		previous_ball_pos := ball_pos
 		ball_pos += ball_dir * BALL_SPEED * dt
+
+		if ball_pos.x + BALL_RADIUS > SCREEN_SIZE {
+			ball_pos.x = SCREEN_SIZE - BALL_RADIUS
+			ball_dir = reflect(ball_dir, {-1, 0})
+		}
+
+		if ball_pos.x - BALL_RADIUS < 0 {
+			ball_pos.x = BALL_RADIUS
+			ball_dir = reflect(ball_dir, {1, 0})
+		}
+
+		if ball_pos.y - BALL_RADIUS < 0 {
+			ball_pos.y = BALL_RADIUS
+			ball_dir = reflect(ball_dir, {0, 1})
+		}
+
+		if ball_pos.y > SCREEN_SIZE + BALL_RADIUS * 6 {
+			restart()
+		}
+
 		paddle_move_velocity: f32
+
 		if rl.IsKeyDown(.LEFT) {
 			paddle_move_velocity -= PADDLE_SPEED
 		}
@@ -62,6 +89,33 @@ main :: proc() {
 		paddle_pos_x += paddle_move_velocity * dt
 		paddle_pos_x = clamp(paddle_pos_x, 0, SCREEN_SIZE - PADDLE_WIDTH)
 
+		paddle_rect := rl.Rectangle{paddle_pos_x, PADDLE_POS_Y, PADDLE_WIDTH, PADDLE_HEIGHT}
+
+		if rl.CheckCollisionCircleRec(ball_pos, BALL_RADIUS, paddle_rect) {
+			collision_normal: rl.Vector2
+
+			if previous_ball_pos.y < paddle_rect.y + paddle_rect.height {
+				collision_normal += {0, -1}
+				ball_pos.y = paddle_rect.y - BALL_RADIUS
+			}
+
+
+			if previous_ball_pos.y > paddle_rect.y + paddle_rect.height {
+				collision_normal += {0, 1}
+				ball_pos.y = paddle_rect.y + paddle_rect.height + BALL_RADIUS
+			}
+			if previous_ball_pos.x < paddle_rect.x {
+				collision_normal += {-1, 0}
+			}
+
+			if previous_ball_pos.x > paddle_rect.x + paddle_rect.width {
+				collision_normal += {1, 0}
+			}
+
+			if collision_normal != 0 {
+				ball_dir = reflect(ball_dir, collision_normal)
+			}
+		}
 		rl.BeginDrawing()
 		rl.ClearBackground({195, 179, 255, 255})
 
@@ -71,7 +125,6 @@ main :: proc() {
 
 		rl.BeginMode2D(camera)
 
-		paddle_rect := rl.Rectangle{paddle_pos_x, PADDLE_POS_Y, PADDLE_WIDTH, PADDLE_HEIGHT}
 
 		rl.DrawRectangleRec(paddle_rect, {50, 150, 90, 255})
 		rl.DrawCircleV(ball_pos, BALL_RADIUS, {200, 90, 20, 255})
@@ -81,4 +134,3 @@ main :: proc() {
 
 	rl.CloseWindow()
 }
-
